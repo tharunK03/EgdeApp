@@ -1,3 +1,4 @@
+```markdown
 <div align="center">
 
 # EgdeApp
@@ -73,11 +74,19 @@ npx http-server -c-1 -p 5173
 Open `http://localhost:5173`. Place a sample processed image at `web/sample_processed.jpg` (copy from your device’s `Pictures/EgdeApp`) to visualize in the page.
 
 ## Sample Output
-Add your captured sample(s) to `docs/` and they will appear below. For example, after tapping “Save Sample”, copy the PNG from your phone to `docs/sample_edges.png` and commit it.
 
-![Processed Canny edges](docs/sample_edges.png)
+**Live Canny edge detection in action:**  
+(Saved from actual device run)
 
-If the image above doesn’t render on GitHub, ensure the file exists at `docs/sample_edges.png` in the repository.
+**Sample 1:**  
+<img width="232" height="511" alt="IMAGE1" src="https://github.com/user-attachments/assets/66f3fef9-4223-42f0-8b57-b7e6dc0868dd" />
+
+
+**Sample 2:**  
+![image2](https://github.com/user-attachments/assets/a2cb3585-059e-4e5f-a663-7c7be59a760d)
+
+
+If the images above don’t render on GitHub, ensure the files exist at those paths in the repository.
 
 ## Troubleshooting
 - Processed view is blank: ensure OpenCV Android SDK is present and `opencv.dir` is set; rebuild.
@@ -91,5 +100,4 @@ If the image above doesn’t render on GitHub, ensure the file exists at `docs/s
 
 ## License
 MIT
-
-
+```
