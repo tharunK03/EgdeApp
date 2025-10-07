@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <android/log.h>
 
 #ifdef HAVE_OPENCV
 #include <opencv2/core.hpp>
@@ -26,13 +27,26 @@ Java_com_example_myapplication_MainActivity_processFrame(
     env->GetByteArrayRegion(yuvNv21, 0, length, buffer.data());
 
 #ifdef HAVE_OPENCV
-    // NV21 to grayscale (Y plane)
+    // Interpret NV21: Y plane first width*height bytes; interleaved VU after.
     const int yPlaneSize = width * height;
     if (yPlaneSize <= length) {
-        cv::Mat yMat(height, width, CV_8UC1, buffer.data());
+        // Grayscale is simply the Y plane
+        cv::Mat gray(height, width, CV_8UC1, reinterpret_cast<unsigned char*>(buffer.data()));
+
+        // Apply Canny to produce an edge map; this can later be uploaded to GL or returned
         cv::Mat edges;
-        cv::Canny(yMat, edges, 50, 150);
-        // For now, we don't return the processed data; rendering will be added later.
+        const double lowThresh = 50.0;
+        const double highThresh = 150.0;
+        cv::Canny(gray, edges, lowThresh, highThresh);
+
+        // Optional: keep an average or simple checksum to prevent compiler optimizing away
+        // and to aid in basic debugging without returning data yet.
+        const cv::Scalar sumVal = cv::sum(edges);
+        (void)sumVal;
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "EgdeApp", "NV21 buffer too small: %d < %d", (int)length, yPlaneSize);
     }
+#else
+    (void)length;
 #endif
 }
