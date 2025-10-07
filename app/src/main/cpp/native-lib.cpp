@@ -38,8 +38,8 @@ Java_com_example_myapplication_MainActivity_processFrame(
 
         // Apply Canny to produce an edge map; stash as RGBA for GL
         cv::Mat edges;
-        const double lowThresh = 50.0;
-        const double highThresh = 150.0;
+        const double lowThresh = 80.0;   // tuned higher to reduce work/noise
+        const double highThresh = 200.0;
         cv::Canny(gray, edges, lowThresh, highThresh);
 
         cv::Mat lastRgba;

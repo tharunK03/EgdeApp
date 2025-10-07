@@ -45,8 +45,8 @@ public class MainActivity extends AppCompatActivity {
     private CaptureRequest.Builder previewRequestBuilder;
     private String cameraId;
     private android.media.ImageReader imageReader;
-    private int previewWidth = 1280;
-    private int previewHeight = 720;
+    private int previewWidth = 960; // reduced for performance (try 640x480 if needed)
+    private int previewHeight = 540;
     private GLSurfaceView glSurfaceView;
     private GlRenderer glRenderer;
     private boolean showProcessed = false;
@@ -55,6 +55,9 @@ public class MainActivity extends AppCompatActivity {
     private Handler imageHandler;
     private long lastFpsTs = 0L;
     private int frameCount = 0;
+    private int frameIndex = 0;
+    private static final int PROCESS_EVERY_N = 2; // process every 2nd frame
+    private byte[] reusableNv21;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -284,10 +287,21 @@ public class MainActivity extends AppCompatActivity {
                     image = reader.acquireLatestImage();
                     if (image == null) return;
                     if (image.getFormat() != android.graphics.ImageFormat.YUV_420_888) return;
+                    // Skip processing if not showing processed view
+                    if (!showProcessed) {
+                        updateFps();
+                        return;
+                    }
+                    // Throttle frames
+                    frameIndex = (frameIndex + 1) % PROCESS_EVERY_N;
+                    if (frameIndex != 0) {
+                        updateFps();
+                        return;
+                    }
                     byte[] nv21 = yuv420ToNv21(image);
                     if (nv21 != null) {
                         processFrame(nv21, image.getWidth(), image.getHeight());
-                        if (showProcessed) glSurfaceView.requestRender();
+                        glSurfaceView.requestRender();
                         updateFps();
                     }
                 } catch (Throwable ignored) {
@@ -296,13 +310,17 @@ public class MainActivity extends AppCompatActivity {
                 }
             };
 
-    private static byte[] yuv420ToNv21(android.media.Image image) {
+    private byte[] yuv420ToNv21(android.media.Image image) {
         android.media.Image.Plane[] planes = image.getPlanes();
         int width = image.getWidth();
         int height = image.getHeight();
         int ySize = width * height;
         int uvSize = width * height / 2;
-        byte[] out = new byte[ySize + uvSize];
+        int cap = ySize + uvSize;
+        if (reusableNv21 == null || reusableNv21.length != cap) {
+            reusableNv21 = new byte[cap];
+        }
+        byte[] out = reusableNv21;
 
         // Y
         java.nio.ByteBuffer yBuf = planes[0].getBuffer();
