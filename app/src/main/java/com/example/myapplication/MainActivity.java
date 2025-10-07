@@ -200,4 +200,5 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public native String stringFromJNI();
+    public native void processFrame(byte[] nv21, int width, int height);
 }

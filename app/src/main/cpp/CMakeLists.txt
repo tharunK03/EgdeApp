@@ -28,6 +28,14 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         # List C/C++ source files with relative paths to this CMakeLists.txt.
         native-lib.cpp)
 
+# Optionally find and link OpenCV if available (set OpenCV_DIR via local.properties / environment)
+find_package(OpenCV QUIET)
+if(OpenCV_FOUND)
+    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(${CMAKE_PROJECT_NAME} ${OpenCV_LIBS})
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE HAVE_OPENCV=1)
+endif()
+
 # Specifies libraries CMake should link to your target library. You
 # can link libraries from various origins, such as libraries defined in this
 # build script, prebuilt third-party libraries, or Android system libraries.
