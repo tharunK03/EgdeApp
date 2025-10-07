@@ -6,6 +6,9 @@
 #ifdef HAVE_OPENCV
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
+static std::vector<unsigned char> g_lastRgba;
+static int g_lastWidth = 0;
+static int g_lastHeight = 0;
 #endif
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -33,20 +36,36 @@ Java_com_example_myapplication_MainActivity_processFrame(
         // Grayscale is simply the Y plane
         cv::Mat gray(height, width, CV_8UC1, reinterpret_cast<unsigned char*>(buffer.data()));
 
-        // Apply Canny to produce an edge map; this can later be uploaded to GL or returned
+        // Apply Canny to produce an edge map; stash as RGBA for GL
         cv::Mat edges;
         const double lowThresh = 50.0;
         const double highThresh = 150.0;
         cv::Canny(gray, edges, lowThresh, highThresh);
 
-        // Optional: keep an average or simple checksum to prevent compiler optimizing away
-        // and to aid in basic debugging without returning data yet.
-        const cv::Scalar sumVal = cv::sum(edges);
-        (void)sumVal;
+        cv::Mat lastRgba;
+        cv::cvtColor(edges, lastRgba, cv::COLOR_GRAY2RGBA);
+        g_lastWidth = lastRgba.cols;
+        g_lastHeight = lastRgba.rows;
+        g_lastRgba.assign(lastRgba.datastart, lastRgba.dataend);
     } else {
         __android_log_print(ANDROID_LOG_WARN, "EgdeApp", "NV21 buffer too small: %d < %d", (int)length, yPlaneSize);
     }
 #else
     (void)length;
+#endif
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_example_myapplication_MainActivity_getLastProcessedRgba(
+        JNIEnv* env,
+        jobject /* this */) {
+#ifdef HAVE_OPENCV
+    if (g_lastRgba.empty() || g_lastWidth <= 0 || g_lastHeight <= 0) return nullptr;
+    jbyteArray out = env->NewByteArray(static_cast<jsize>(g_lastRgba.size()));
+    if (!out) return nullptr;
+    env->SetByteArrayRegion(out, 0, static_cast<jsize>(g_lastRgba.size()), reinterpret_cast<const jbyte*>(g_lastRgba.data()));
+    return out;
+#else
+    return nullptr;
 #endif
 }

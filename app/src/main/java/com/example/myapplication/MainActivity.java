@@ -18,6 +18,8 @@ import android.os.Bundle;
 import android.view.Surface;
 import android.view.TextureView;
 import android.widget.Toast;
+import android.opengl.GLSurfaceView;
+import android.widget.Button;
 
 import java.util.Arrays;
 
@@ -37,6 +39,9 @@ public class MainActivity extends AppCompatActivity {
     private android.media.ImageReader imageReader;
     private int previewWidth = 1280;
     private int previewHeight = 720;
+    private GLSurfaceView glSurfaceView;
+    private GlRenderer glRenderer;
+    private boolean showProcessed = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,6 +50,23 @@ public class MainActivity extends AppCompatActivity {
 
         textureView = findViewById(R.id.texture_view);
         textureView.setSurfaceTextureListener(surfaceTextureListener);
+
+        glSurfaceView = findViewById(R.id.gl_view);
+        glSurfaceView.setEGLContextClientVersion(2);
+        glRenderer = new GlRenderer(this);
+        glSurfaceView.setRenderer(glRenderer);
+        glSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+
+        Button toggle = findViewById(R.id.btn_toggle);
+        toggle.setOnClickListener(v -> {
+            showProcessed = !showProcessed;
+            glSurfaceView.setVisibility(showProcessed ? android.view.View.VISIBLE : android.view.View.GONE);
+            textureView.setVisibility(showProcessed ? android.view.View.GONE : android.view.View.VISIBLE);
+            if (showProcessed) {
+                glRenderer.setFrameSize(previewWidth, previewHeight);
+                glSurfaceView.requestRender();
+            }
+        });
     }
 
     @Override
@@ -230,6 +252,7 @@ public class MainActivity extends AppCompatActivity {
                     byte[] nv21 = yuv420ToNv21(image);
                     if (nv21 != null) {
                         processFrame(nv21, image.getWidth(), image.getHeight());
+                        if (showProcessed) glSurfaceView.requestRender();
                     }
                 } catch (Throwable ignored) {
                 } finally {
@@ -283,4 +306,7 @@ public class MainActivity extends AppCompatActivity {
         }
         return out;
     }
+
+    // JNI pulls last processed frame as RGBA for GL upload
+    public native byte[] getLastProcessedRgba();
 }
