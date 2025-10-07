@@ -69,3 +69,25 @@ Java_com_example_myapplication_MainActivity_getLastProcessedRgba(
     return nullptr;
 #endif
 }
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_example_myapplication_MainActivity_getLastProcessedWidth(
+        JNIEnv* /*env*/,
+        jobject /* this */) {
+#ifdef HAVE_OPENCV
+    return g_lastWidth;
+#else
+    return 0;
+#endif
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_example_myapplication_MainActivity_getLastProcessedHeight(
+        JNIEnv* /*env*/,
+        jobject /* this */) {
+#ifdef HAVE_OPENCV
+    return g_lastHeight;
+#else
+    return 0;
+#endif
+}

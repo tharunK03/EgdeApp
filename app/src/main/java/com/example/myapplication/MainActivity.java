@@ -20,6 +20,13 @@ import android.view.TextureView;
 import android.widget.Toast;
 import android.opengl.GLSurfaceView;
 import android.widget.Button;
+import android.widget.TextView;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.SystemClock;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.provider.MediaStore;
 
 import java.util.Arrays;
 
@@ -42,6 +49,11 @@ public class MainActivity extends AppCompatActivity {
     private GLSurfaceView glSurfaceView;
     private GlRenderer glRenderer;
     private boolean showProcessed = false;
+    private TextView tvFps;
+    private HandlerThread imageThread;
+    private Handler imageHandler;
+    private long lastFpsTs = 0L;
+    private int frameCount = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,7 +78,18 @@ public class MainActivity extends AppCompatActivity {
                 glRenderer.setFrameSize(previewWidth, previewHeight);
                 glSurfaceView.requestRender();
             }
+            toggle.setText(showProcessed ? "Raw" : "Processed");
+            getSharedPreferences("prefs", MODE_PRIVATE).edit().putBoolean("showProcessed", showProcessed).apply();
         });
+
+        tvFps = findViewById(R.id.tv_fps);
+        Button btnSave = findViewById(R.id.btn_save);
+        btnSave.setOnClickListener(v -> saveSampleFrame());
+
+        showProcessed = getSharedPreferences("prefs", MODE_PRIVATE).getBoolean("showProcessed", false);
+        glSurfaceView.setVisibility(showProcessed ? android.view.View.VISIBLE : android.view.View.GONE);
+        textureView.setVisibility(showProcessed ? android.view.View.GONE : android.view.View.VISIBLE);
+        toggle.setText(showProcessed ? "Raw" : "Processed");
     }
 
     @Override
@@ -189,7 +212,7 @@ public class MainActivity extends AppCompatActivity {
                     android.graphics.ImageFormat.YUV_420_888,
                     2
             );
-            imageReader.setOnImageAvailableListener(onImageAvailableListener, null);
+            imageReader.setOnImageAvailableListener(onImageAvailableListener, imageHandler);
         }
 
         try {
@@ -253,6 +276,7 @@ public class MainActivity extends AppCompatActivity {
                     if (nv21 != null) {
                         processFrame(nv21, image.getWidth(), image.getHeight());
                         if (showProcessed) glSurfaceView.requestRender();
+                        updateFps();
                     }
                 } catch (Throwable ignored) {
                 } finally {
@@ -309,4 +333,72 @@ public class MainActivity extends AppCompatActivity {
 
     // JNI pulls last processed frame as RGBA for GL upload
     public native byte[] getLastProcessedRgba();
+    public native int getLastProcessedWidth();
+    public native int getLastProcessedHeight();
+
+    private void updateFps() {
+        long now = SystemClock.elapsedRealtime();
+        frameCount++;
+        if (lastFpsTs == 0L) lastFpsTs = now;
+        long dt = now - lastFpsTs;
+        if (dt >= 1000L) {
+            final int fps = (int) (frameCount * 1000L / dt);
+            runOnUiThread(() -> tvFps.setText("FPS: " + fps));
+            frameCount = 0;
+            lastFpsTs = now;
+        }
+    }
+
+    private void saveSampleFrame() {
+        byte[] rgba = getLastProcessedRgba();
+        if (rgba == null) {
+            Toast.makeText(this, "No processed frame yet", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        int w = getLastProcessedWidth();
+        int h = getLastProcessedHeight();
+        if (w <= 0 || h <= 0) return;
+        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        bmp.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(rgba));
+        String name = "processed_" + System.currentTimeMillis() + ".png";
+        java.io.OutputStream os = null;
+        try {
+            android.content.ContentValues values = new android.content.ContentValues();
+            values.put(MediaStore.Images.Media.DISPLAY_NAME, name);
+            values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+            values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/EgdeApp");
+            android.net.Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+            if (uri != null) {
+                os = getContentResolver().openOutputStream(uri);
+                bmp.compress(Bitmap.CompressFormat.PNG, 100, os);
+                Toast.makeText(this, "Saved: " + name, Toast.LENGTH_SHORT).show();
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Save failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        } finally {
+            if (os != null) try { os.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (imageThread == null) {
+            imageThread = new HandlerThread("ImageThread");
+            imageThread.start();
+            imageHandler = new Handler(imageThread.getLooper());
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        closeCamera();
+        if (imageThread != null) {
+            imageThread.quitSafely();
+            try { imageThread.join(); } catch (InterruptedException ignored) {}
+            imageThread = null;
+            imageHandler = null;
+        }
+        super.onPause();
+    }
 }
