@@ -34,6 +34,9 @@ public class MainActivity extends AppCompatActivity {
     private CameraCaptureSession captureSession;
     private CaptureRequest.Builder previewRequestBuilder;
     private String cameraId;
+    private android.media.ImageReader imageReader;
+    private int previewWidth = 1280;
+    private int previewHeight = 720;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -154,15 +157,26 @@ public class MainActivity extends AppCompatActivity {
         SurfaceTexture surfaceTexture = textureView.getSurfaceTexture();
         if (surfaceTexture == null) return;
 
-        surfaceTexture.setDefaultBufferSize(1280, 720);
+        surfaceTexture.setDefaultBufferSize(previewWidth, previewHeight);
         Surface previewSurface = new Surface(surfaceTexture);
+
+        if (imageReader == null) {
+            imageReader = android.media.ImageReader.newInstance(
+                    previewWidth,
+                    previewHeight,
+                    android.graphics.ImageFormat.YUV_420_888,
+                    2
+            );
+            imageReader.setOnImageAvailableListener(onImageAvailableListener, null);
+        }
 
         try {
             previewRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             previewRequestBuilder.addTarget(previewSurface);
+            previewRequestBuilder.addTarget(imageReader.getSurface());
 
             cameraDevice.createCaptureSession(
-                    Arrays.asList(previewSurface),
+                    Arrays.asList(previewSurface, imageReader.getSurface()),
                     new CameraCaptureSession.StateCallback() {
                         @Override
                         public void onConfigured(@NonNull CameraCaptureSession session) {
@@ -193,6 +207,10 @@ public class MainActivity extends AppCompatActivity {
             captureSession.close();
             captureSession = null;
         }
+        if (imageReader != null) {
+            imageReader.close();
+            imageReader = null;
+        }
         if (cameraDevice != null) {
             cameraDevice.close();
             cameraDevice = null;
@@ -201,4 +219,68 @@ public class MainActivity extends AppCompatActivity {
 
     public native String stringFromJNI();
     public native void processFrame(byte[] nv21, int width, int height);
+
+    private final android.media.ImageReader.OnImageAvailableListener onImageAvailableListener =
+            reader -> {
+                android.media.Image image = null;
+                try {
+                    image = reader.acquireLatestImage();
+                    if (image == null) return;
+                    if (image.getFormat() != android.graphics.ImageFormat.YUV_420_888) return;
+                    byte[] nv21 = yuv420ToNv21(image);
+                    if (nv21 != null) {
+                        processFrame(nv21, image.getWidth(), image.getHeight());
+                    }
+                } catch (Throwable ignored) {
+                } finally {
+                    if (image != null) image.close();
+                }
+            };
+
+    private static byte[] yuv420ToNv21(android.media.Image image) {
+        android.media.Image.Plane[] planes = image.getPlanes();
+        int width = image.getWidth();
+        int height = image.getHeight();
+        int ySize = width * height;
+        int uvSize = width * height / 2;
+        byte[] out = new byte[ySize + uvSize];
+
+        // Y
+        java.nio.ByteBuffer yBuf = planes[0].getBuffer();
+        int yRowStride = planes[0].getRowStride();
+        int pos = 0;
+        for (int row = 0; row < height; row++) {
+            int len = Math.min(width, yBuf.remaining());
+            yBuf.get(out, pos, len);
+            pos += len;
+            if (row < height - 1) {
+                yBuf.position(yBuf.position() + (yRowStride - width));
+            }
+        }
+
+        // VU (NV21)
+        java.nio.ByteBuffer uBuf = planes[1].getBuffer();
+        java.nio.ByteBuffer vBuf = planes[2].getBuffer();
+        int uRowStride = planes[1].getRowStride();
+        int vRowStride = planes[2].getRowStride();
+        int uPixelStride = planes[1].getPixelStride();
+        int vPixelStride = planes[2].getPixelStride();
+
+        // Interleave V and U bytes
+        int uvHeight = height / 2;
+        int uvWidth = width / 2;
+        for (int row = 0; row < uvHeight; row++) {
+            for (int col = 0; col < uvWidth; col++) {
+                int vuIndex = pos;
+                int vIndex = row * vRowStride + col * vPixelStride;
+                int uIndex = row * uRowStride + col * uPixelStride;
+                if (vIndex < vBuf.limit() && uIndex < uBuf.limit()) {
+                    out[vuIndex] = vBuf.get(vIndex);
+                    out[vuIndex + 1] = uBuf.get(uIndex);
+                    pos += 2;
+                }
+            }
+        }
+        return out;
+    }
 }
