@@ -1,0 +1,14 @@
+{
+  "name": "edgeapp-web-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "npx http-server -c-1 -p 5173"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.5",
+    "typescript": "5.6.3"
+  },
+  "type": "module"
+}
