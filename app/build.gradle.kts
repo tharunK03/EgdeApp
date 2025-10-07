@@ -1,3 +1,4 @@
+import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
 }
@@ -33,6 +34,7 @@ android {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
+            // Note: OpenCV_DIR is set directly in CMakeLists.txt as a fallback
         }
     }
     buildFeatures {

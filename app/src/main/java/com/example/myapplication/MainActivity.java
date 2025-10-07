@@ -35,6 +35,7 @@ public class MainActivity extends AppCompatActivity {
     static {
         System.loadLibrary("myapplication");
     }
+    
 
     private static final int REQ_CAMERA = 1001;
 
@@ -95,6 +96,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (imageThread == null) {
+            imageThread = new HandlerThread("ImageThread");
+            imageThread.start();
+            imageHandler = new Handler(imageThread.getLooper());
+        }
         if (hasCameraPermission()) {
             if (textureView.isAvailable()) {
                 openCamera();
@@ -109,6 +115,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         closeCamera();
+        if (imageThread != null) {
+            imageThread.quitSafely();
+            try { imageThread.join(); } catch (InterruptedException ignored) {}
+            imageThread = null;
+            imageHandler = null;
+        }
         super.onPause();
     }
 
@@ -380,25 +392,4 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (imageThread == null) {
-            imageThread = new HandlerThread("ImageThread");
-            imageThread.start();
-            imageHandler = new Handler(imageThread.getLooper());
-        }
-    }
-
-    @Override
-    protected void onPause() {
-        closeCamera();
-        if (imageThread != null) {
-            imageThread.quitSafely();
-            try { imageThread.join(); } catch (InterruptedException ignored) {}
-            imageThread = null;
-            imageHandler = null;
-        }
-        super.onPause();
-    }
 }
